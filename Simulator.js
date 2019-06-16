@@ -84,11 +84,10 @@ function needToMove(a, b) {
 // ----- Simulator backend ---------------------------------------------------
 
 var wss = new WebSocket.Server({ port: 5401 });
-let clientSock;
 
 function createTrackerConnection(args) {
   console.log("args", args);
-  net.createConnection(args, clientSock => {
+  const clientSock = net.createConnection(args, () => {
     console.log(
       `connected to client tcp://${args.host || "localhost"}:${args.port}`
     );
@@ -141,14 +140,9 @@ wss.on("connection", function connection(ws) {
   }
 
   ws.on("message", msg => {
-    if (!clientSock) {
-      console.error("not connected to client, not running command");
-      return;
-    }
     const { command, az, el } = JSON.parse(msg);
     switch (command) {
       case "stop": {
-        clientSock.write("S\n");
         trackerWriteEmitter.emit("write", "S\n");
         console.log("stopping");
         break;
