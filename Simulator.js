@@ -237,4 +237,6 @@ net
     console.log("started?");
     simStartEmitter.emit("start");
   });
-console.log("tcp://4533 Device Simulator Running");
+console.log(
+  "tcp://4533 Device Simulator Running (node Simulator.js tcp://4.3.4.4:4030 to connect to device)"
+);
