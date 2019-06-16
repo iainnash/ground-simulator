@@ -3,10 +3,14 @@ const WebSocket = require("ws");
 const connect = require("connect");
 const serveStatic = require("serve-static");
 const EventEmitter = require("events");
+const url = require("url");
 
 class SimStartEmitter extends EventEmitter {}
+class TrackerWriteEmitter extends EventEmitter {}
 
 const simStartEmitter = new SimStartEmitter();
+
+const trackerWriteEmitter = new TrackerWriteEmitter();
 
 // ----- Static web-server ---------------------------------------------------
 
@@ -81,12 +85,33 @@ function needToMove(a, b) {
 
 var wss = new WebSocket.Server({ port: 5401 });
 let clientSock;
-simStartEmitter.on("start", () => {
-  console.log("has start sim");
-  clientSock = net.createConnection({ port: 4533 }, () => {
-    console.log("connected to sim client");
+
+function createTrackerConnection(args) {
+  console.log("args", args);
+  net.createConnection(args, clientSock => {
+    console.log(
+      `connected to client tcp://${args.host || "localhost"}:${args.port}`
+    );
+    trackerWriteEmitter.on("write", data => {
+      clientSock.write(data);
+    });
   });
+}
+
+const addtlArgs = process.argv.slice(2);
+if (addtlArgs.length) {
+  const { protocol, hostname, port } = url.parse(addtlArgs[0]);
+  if (protocol === "tcp:") {
+    console.log("connecting remote tcp");
+    createTrackerConnection({ host: hostname, port });
+  }
+}
+
+simStartEmitter.on("start", () => {
+  console.log("connecting sim");
+  createTrackerConnection({ port: 4533 });
 });
+
 wss.on("connection", function connection(ws) {
   console.log("simulator connected");
 
@@ -120,17 +145,18 @@ wss.on("connection", function connection(ws) {
       console.error("not connected to client, not running command");
       return;
     }
-    const { command, targetX, targetY } = JSON.parse(msg);
+    const { command, az, el } = JSON.parse(msg);
     switch (command) {
       case "stop": {
         clientSock.write("S\n");
+        trackerWriteEmitter.emit("write", "S\n");
         console.log("stopping");
         break;
       }
       case "move": {
-        if (check(targetX) && check(targetY)) {
-          clientSock.write(`P ${targetX} ${targetY}`);
-          console.log("moving ", targetX, targetY);
+        if (check(az) && check(el)) {
+          trackerWriteEmitter.emit("write", `P ${az} ${el}`);
+          console.log("moving ", az, el);
         }
         break;
       }
